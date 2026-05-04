@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Hidden Tabs Keeper</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e7e9ee;
+    --muted: #8a92a3;
+    --accent: #6ea8ff;
+    --danger: #ff7676;
+    --ok: #6dd58b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 20px 80px; }
+  header h1 { font-size: 22px; margin: 0 0 4px; }
+  header p { color: var(--muted); margin: 0 0 24px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; letter-spacing: 0.02em; }
+  p { margin: 6px 0 12px; color: var(--muted); }
+  input[type=password], input[type=file] {
+    width: 100%; padding: 9px 11px; background: #0c0e13; color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; font: inherit; margin-bottom: 8px;
+  }
+  input[type=password]:focus { outline: none; border-color: var(--accent); }
+  button {
+    padding: 9px 14px; background: var(--accent); color: #0a0d12; border: 0;
+    border-radius: 7px; font: 600 14px/1 inherit; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  ul { list-style: none; padding: 0; margin: 0 0 12px; }
+  li { padding: 7px 10px; background: #0c0e13; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 4px;
+       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toast { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+  .toast.ok { background: rgba(109, 213, 139, 0.12); color: var(--ok); border: 1px solid rgba(109, 213, 139, 0.3); }
+  .toast.err { background: rgba(255, 118, 118, 0.12); color: var(--danger); border: 1px solid rgba(255, 118, 118, 0.3); }
+  .count { color: var(--muted); font-weight: normal; }
+  code { background: #0c0e13; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+  a.bookmarklet {
+    display: inline-block; padding: 8px 14px; background: var(--accent); color: #0a0d12;
+    border-radius: 7px; text-decoration: none; font-weight: 600;
+  }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre { background: #0c0e13; border: 1px solid var(--border); padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Hidden Tabs Keeper</h1>
+    <p>Save incognito tabs to an encrypted file. Restore them later in a fresh incognito window.</p>
+  </header>
+
+  <div id="toast"></div>
+
+  <section id="captureSection">
+    <h2>Captured tabs <span class="count" id="count"></span></h2>
+    <ul id="tablist"></ul>
+    <div class="row">
+      <button id="clearBtn" class="secondary">Clear list</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Save vault</h2>
+    <p>Encrypt the captured tabs with a passphrase and download an <code>.htk</code> file.</p>
+    <input type="password" id="savePass" placeholder="Passphrase" autocomplete="new-password">
+    <input type="password" id="savePass2" placeholder="Confirm passphrase" autocomplete="new-password">
+    <button id="saveBtn">Encrypt &amp; download</button>
+  </section>
+
+  <section>
+    <h2>Load vault</h2>
+    <p>Pick an <code>.htk</code> file, enter the passphrase, then reopen all saved tabs.</p>
+    <input type="file" id="loadFile" accept=".htk,application/octet-stream">
+    <input type="password" id="loadPass" placeholder="Passphrase" autocomplete="off">
+    <button id="loadBtn">Decrypt</button>
+    <div id="loaded" hidden style="margin-top:14px">
+      <h2 style="margin-top:14px">Restored tabs <span class="count" id="loadedCount"></span></h2>
+      <ul id="loadedList"></ul>
+      <div class="row">
+        <button id="openAllBtn">Open all in new tabs</button>
+        <button id="mergeBtn" class="secondary">Add to capture list</button>
+      </div>
+      <p style="font-size:12px;margin-top:10px">Your browser may ask to allow multiple popups the first time.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bookmarklet</h2>
+    <p>Drag this link to your bookmarks bar, then enable it in incognito (right-click the bookmark → "Show in Incognito" / make sure your bookmarks bar is visible in incognito).</p>
+    <p><a id="bmlink" class="bookmarklet" href="#">+ Save tab to Hidden Vault</a></p>
+    <details>
+      <summary>Show bookmarklet source</summary>
+      <pre id="bmsrc"></pre>
+    </details>
+    <p style="margin-top:14px">Also bookmark <strong>this page</strong> itself so you can open the vault in incognito to save / load.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'htk_tabs_v1';
+  const PBKDF2_ITERS = 250000;
+  const FILE_MAGIC = new Uint8Array([0x48, 0x54, 0x4B, 0x01]); // "HTK\x01"
+
+  const $ = (id) => document.getElementById(id);
+
+  function readTabs() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+    catch { return []; }
+  }
+  function writeTabs(arr) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  }
+
+  function showToast(msg, kind = 'ok', timeout = 0) {
+    const t = $('toast');
+    t.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'toast ' + kind;
+    div.textContent = msg;
+    t.appendChild(div);
+    if (timeout) setTimeout(() => { if (t.contains(div)) t.removeChild(div); }, timeout);
+  }
+
+  function renderTabs() {
+    const tabs = readTabs();
+    $('count').textContent = tabs.length ? `(${tabs.length})` : '(none yet)';
+    const ul = $('tablist');
+    ul.innerHTML = '';
+    if (!tabs.length) {
+      const li = document.createElement('li');
+      li.style.color = 'var(--muted)';
+      li.textContent = 'No tabs captured. Click the bookmarklet on a tab to add it.';
+      ul.appendChild(li);
+      return;
+    }
+    tabs.forEach((url, i) => {
+      const li = document.createElement('li');
+      li.title = url;
+      li.textContent = `${i + 1}. ${url}`;
+      ul.appendChild(li);
+    });
+  }
+
+  // --- Crypto ---------------------------------------------------------------
+  async function deriveKey(pass, salt) {
+    const baseKey = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERS, hash: 'SHA-256' },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false, ['encrypt', 'decrypt']
+    );
+  }
+
+  async function encryptVault(urls, pass) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(pass, salt);
+    const plain = new TextEncoder().encode(JSON.stringify({ v: 1, savedAt: Date.now(), urls }));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain));
+    const out = new Uint8Array(FILE_MAGIC.length + salt.length + iv.length + ct.length);
+    let p = 0;
+    out.set(FILE_MAGIC, p); p += FILE_MAGIC.length;
+    out.set(salt, p); p += salt.length;
+    out.set(iv, p); p += iv.length;
+    out.set(ct, p);
+    return out;
+  }
+
+  async function decryptVault(buf, pass) {
+    const u8 = new Uint8Array(buf);
+    if (u8.length < FILE_MAGIC.length + 16 + 12 + 16) throw new Error('File too small');
+    for (let i = 0; i < FILE_MAGIC.length; i++) {
+      if (u8[i] !== FILE_MAGIC[i]) throw new Error('Not a valid .htk file');
+    }
+    let p = FILE_MAGIC.length;
+    const salt = u8.slice(p, p + 16); p += 16;
+    const iv = u8.slice(p, p + 12); p += 12;
+    const ct = u8.slice(p);
+    const key = await deriveKey(pass, salt);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const obj = JSON.parse(new TextDecoder().decode(pt));
+    if (!obj || !Array.isArray(obj.urls)) throw new Error('Vault payload malformed');
+    return obj.urls;
+  }
+
+  // --- Capture handler ------------------------------------------------------
+  // If opened with ?add=<url>, push that URL into localStorage and try to close.
+  const params = new URLSearchParams(location.search);
+  const addUrl = params.get('add');
+  if (addUrl) {
+    try {
+      const tabs = readTabs();
+      // Avoid trivial duplicates (exact match).
+      if (!tabs.includes(addUrl)) tabs.push(addUrl);
+      writeTabs(tabs);
+      document.body.innerHTML =
+        '<main><section style="text-align:center"><h1 style="font-size:18px">Tab saved</h1>' +
+        '<p style="word-break:break-all;font-size:13px">' + addUrl.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</p>' +
+        '<p>Total in vault list: <strong>' + tabs.length + '</strong></p>' +
+        '<p>Closing this tab…</p>' +
+        '<button onclick="window.close()">Close now</button></section></main>';
+      setTimeout(() => { try { window.close(); } catch (_) {} }, 700);
+    } catch (e) {
+      document.body.innerHTML = '<main><section><h1>Error</h1><p>' + e.message + '</p></section></main>';
+    }
+    return;
+  }
+
+  // --- Bookmarklet renderer -------------------------------------------------
+  const vaultUrl = location.origin + location.pathname;
+  const bm =
+    "javascript:(function(){window.open('" + vaultUrl +
+    "?add='+encodeURIComponent(location.href),'_blank');})();";
+  $('bmlink').setAttribute('href', bm);
+  $('bmsrc').textContent = bm;
+
+  // --- UI wiring ------------------------------------------------------------
+  renderTabs();
+
+  $('clearBtn').addEventListener('click', () => {
+    if (!confirm('Clear all captured tabs from this session? (Encrypted files on disk are unaffected.)')) return;
+    writeTabs([]);
+    renderTabs();
+    showToast('Capture list cleared.', 'ok', 2500);
+  });
+
+  $('saveBtn').addEventListener('click', async () => {
+    const pass = $('savePass').value;
+    const pass2 = $('savePass2').value;
+    const tabs = readTabs();
+    if (!tabs.length) return showToast('No tabs to save yet.', 'err', 3000);
+    if (pass.length < 8) return showToast('Use a passphrase of at least 8 characters.', 'err', 3500);
+    if (pass !== pass2) return showToast('Passphrases do not match.', 'err', 3000);
+    $('saveBtn').disabled = true;
+    try {
+      const blob = new Blob([await encryptVault(tabs, pass)], { type: 'application/octet-stream' });
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.download = 'vault-' + ts + '.htk';
+      a.href = URL.createObjectURL(blob);
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      $('savePass').value = ''; $('savePass2').value = '';
+      showToast('Encrypted vault downloaded (' + tabs.length + ' tabs).', 'ok', 4000);
+    } catch (e) {
+      showToast('Encryption failed: ' + e.message, 'err', 5000);
+    } finally {
+      $('saveBtn').disabled = false;
+    }
+  });
+
+  let restoredUrls = [];
+
+  $('loadBtn').addEventListener('click', async () => {
+    const file = $('loadFile').files[0];
+    const pass = $('loadPass').value;
+    if (!file) return showToast('Pick a .htk file first.', 'err', 3000);
+    if (!pass) return showToast('Enter the passphrase.', 'err', 3000);
+    $('loadBtn').disabled = true;
+    try {
+      const buf = await file.arrayBuffer();
+      const urls = await decryptVault(buf, pass);
+      restoredUrls = urls;
+      const ul = $('loadedList');
+      ul.innerHTML = '';
+      urls.forEach((u, i) => {
+        const li = document.createElement('li');
+        li.title = u;
+        li.textContent = (i + 1) + '. ' + u;
+        ul.appendChild(li);
+      });
+      $('loadedCount').textContent = '(' + urls.length + ')';
+      $('loaded').hidden = false;
+      $('loadPass').value = '';
+      showToast('Vault decrypted. ' + urls.length + ' tabs ready.', 'ok', 4000);
+    } catch (e) {
+      restoredUrls = [];
+      $('loaded').hidden = true;
+      showToast('Decryption failed. Wrong passphrase or corrupt file.', 'err', 5000);
+    } finally {
+      $('loadBtn').disabled = false;
+    }
+  });
+
+  $('openAllBtn').addEventListener('click', () => {
+    if (!restoredUrls.length) return;
+    let blocked = 0;
+    restoredUrls.forEach(u => {
+      const w = window.open(u, '_blank');
+      if (!w) blocked++;
+    });
+    if (blocked) showToast(blocked + ' tab(s) were blocked. Allow popups for this page and try again.', 'err', 6000);
+  });
+
+  $('mergeBtn').addEventListener('click', () => {
+    if (!restoredUrls.length) return;
+    const tabs = readTabs();
+    let added = 0;
+    restoredUrls.forEach(u => { if (!tabs.includes(u)) { tabs.push(u); added++; } });
+    writeTabs(tabs);
+    renderTabs();
+    showToast('Added ' + added + ' tab(s) to the capture list.', 'ok', 3000);
+  });
+})();
+</script>
+</body>
+</html>
